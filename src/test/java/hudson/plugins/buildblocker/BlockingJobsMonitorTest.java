@@ -26,12 +26,15 @@ package hudson.plugins.buildblocker;
 import hudson.model.Cause.UserCause;
 import hudson.model.FreeStyleBuild;
 import hudson.model.FreeStyleProject;
+import hudson.model.ParameterValue;
 import hudson.model.ParametersAction;
+import hudson.model.Queue;
 import hudson.model.StringParameterValue;
 import hudson.model.labels.LabelAtom;
 import hudson.slaves.DumbSlave;
 import hudson.slaves.SlaveComputer;
 import hudson.tasks.Shell;
+import java.util.ArrayList;
 import jenkins.model.Jenkins;
 import org.jvnet.hudson.test.HudsonTestCase;
 
@@ -62,15 +65,31 @@ public class BlockingJobsMonitorTest extends HudsonTestCase {
         }
 
         String blockingJobName = "blockingJob";
-        String blockingEnvVar = "blockingBranch";
+        String blockingEnvVar = "branchName";
 
         FreeStyleProject blockingProject = this.createFreeStyleProject(blockingJobName);
         blockingProject.setAssignedLabel(label);
 
         Shell shell = new Shell("sleep 2");
         blockingProject.getBuildersList().add(shell);
+        ArrayList<ParameterValue> values = new ArrayList<ParameterValue>();
+        values.add(new StringParameterValue("blockingEnvVars", "branchName"));
+        values.add(new StringParameterValue("GIT_BRANCH", ""));
+        values.add(new StringParameterValue("branchName", "someBlockingBranch"));
+        Future<FreeStyleBuild> future = blockingProject.scheduleBuild2(0, new UserCause(), new ParametersAction(values));
 
-        Future<FreeStyleBuild> future = blockingProject.scheduleBuild2(0, new UserCause(), new ParametersAction(new StringParameterValue("branchName", blockingEnvVar)));
+        FreeStyleProject blockedProject = this.createFreeStyleProject("random");
+        Future<FreeStyleBuild> future2 = blockedProject.scheduleBuild2(11, new UserCause(), new ParametersAction(values));
+//        CaptureEnvironmentBuilder ceb = new CaptureEnvironmentBuilder();
+//        blockedProject.getBuildersList().add(ceb);
+//        WebClient wc = new WebClient();
+//        wc.setThrowExceptionOnFailingStatusCode(false);
+//        wc.setPrintContentOnFailingStatusCode(false);
+//        HtmlForm form = wc.getPage(blockedProject, "build").getFormByName("parameters");
+//        form.getSelectByName("").getOptionByText("Specific build").setSelected(true);
+//        form.getInputByName("buildNumber").setValueAttribute("6");
+//        submit(form);
+        Queue.Item q = hudson.getQueue().getItem(blockedProject);
 
         // wait until blocking job started
         while (!slave.getComputer().getExecutors().get(0).isBusy()) {
@@ -97,19 +116,19 @@ public class BlockingJobsMonitorTest extends HudsonTestCase {
 
         //blockingBranch
         BlockingJobsMonitor blockingBranchMonitorUsingNull = new BlockingJobsMonitor(null, null);
-        assertNull(blockingBranchMonitorUsingNull.getBlockingJob(null));
+        assertNull(blockingBranchMonitorUsingNull.getBlockingJob(q));
 
         BlockingJobsMonitor blockingBranchMonitorNotMatching = new BlockingJobsMonitor(null, "xxx");
-        assertNull(blockingBranchMonitorNotMatching.getBlockingJob(null));
+        assertNull(blockingBranchMonitorNotMatching.getBlockingJob(q));
 
         BlockingJobsMonitor blockingBranchMonitorUsingFullName = new BlockingJobsMonitor(null, blockingEnvVar);
-        assertEquals(blockingJobName, blockingBranchMonitorUsingFullName.getBlockingJob(null).getDisplayName());
+        assertEquals(blockingJobName, blockingBranchMonitorUsingFullName.getBlockingJob(q).getDisplayName());
 
         BlockingJobsMonitor blockingBranchMonitorUsingMoreLines = new BlockingJobsMonitor(null, "xxx\n"+blockingEnvVar+"\nyyy");
-        assertEquals(blockingJobName, blockingBranchMonitorUsingMoreLines.getBlockingJob(null).getDisplayName());
+        assertEquals(blockingJobName, blockingBranchMonitorUsingMoreLines.getBlockingJob(q).getDisplayName());
 
         BlockingJobsMonitor blockingBranchMonitorUsingWrongRegex = new BlockingJobsMonitor(null, "*BW2S.*QRT.");
-        assertNull(blockingBranchMonitorUsingWrongRegex.getBlockingJob(null));
+        assertNull(blockingBranchMonitorUsingWrongRegex.getBlockingJob(q));
 
         // wait until blocking job stopped
         while (!future.isDone()) {

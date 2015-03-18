@@ -29,6 +29,8 @@ import hudson.model.Computer;
 import hudson.model.Executor;
 import hudson.model.Queue;
 import hudson.model.AbstractProject;
+import hudson.model.ParameterValue;
+import hudson.model.ParametersAction;
 import hudson.model.Run;
 import hudson.model.TaskListener;
 import hudson.model.queue.SubTask;
@@ -37,7 +39,9 @@ import jenkins.model.Jenkins;
 import org.apache.commons.lang.StringUtils;
 
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -56,19 +60,19 @@ public class BlockingJobsMonitor {
     /**
      * the list of regular expressions from the job configuration
      */
-    private List<String> blockingBranches;
+    private List<String> blockingEnvVars;
 
     /**
      * Constructor using the job configuration entry for blocking jobs
      *
      * @param blockingJobs line feed separated list og blocking jobs
      */
-    public BlockingJobsMonitor(String blockingJobs, String blockingBranches) {
+    public BlockingJobsMonitor(String blockingJobs, String blockingEnvVarRaw) {
         if (StringUtils.isNotBlank(blockingJobs)) {
             this.blockingJobs = Arrays.asList(blockingJobs.split("\n"));
         }
-        if (StringUtils.isNotBlank(blockingBranches)) {
-            this.blockingBranches = Arrays.asList(blockingBranches.split("\n"));
+        if (StringUtils.isNotBlank(blockingEnvVarRaw)) {
+            this.blockingEnvVars = Arrays.asList(blockingEnvVarRaw.split("\n"));
         }
     }
 
@@ -80,7 +84,7 @@ public class BlockingJobsMonitor {
      * @return the name of the first blocking job.
      */
     public SubTask getBlockingJob(Queue.Item item) {
-        if (this.blockingJobs == null && this.blockingBranches == null) {
+        if (this.blockingJobs == null && this.blockingEnvVars == null) {
             return null;
         }
 
@@ -114,19 +118,31 @@ public class BlockingJobsMonitor {
                             }
                         }
                     }
-                    if (this.blockingBranches != null && !this.blockingBranches.isEmpty()) {
-                        for (String blockingBranch : this.blockingBranches) {
+                    if (this.blockingEnvVars != null && !this.blockingEnvVars.isEmpty()) {
+                        for (String envVar : this.blockingEnvVars) {
+                            Map<String, String> itemParamsMap = new HashMap<String, String>();
+                            if (item != null) {
+                                for (ParametersAction pa : item.getActions(ParametersAction.class)) {
+                                    for (ParameterValue p : pa.getParameters()) {
+                                        String valueRaw = p.getShortDescription();
+                                        if (StringUtils.isNotBlank(valueRaw) && valueRaw.contains("=")) {
+                                            String[] keyValue = valueRaw.split("=",-1);
+                                            String value = keyValue[1].replaceAll("^\'|\'$", "");
+                                            if (value != null) {
+                                                itemParamsMap.put(p.getName(), value);
+                                            }
+                                        }
+                                    }
+                                }
+                                Logger.getLogger(BlockingJobsMonitor.class.getName()).log(Level.INFO, "itemParamsMap: " + itemParamsMap);
+                            }
                             try {
+                                String blockingVarValue = itemParamsMap.get(envVar);
                                 Run build = project.getLastBuild();
                                 EnvVars environment = build.getEnvironment(TaskListener.NULL);
-                                String gitBranch = environment.get("GIT_BRANCH");
-                                String branchName = environment.get("branchName");
-                                if (branchName != null && branchName.matches(blockingBranch)) {
-                                    Logger.getLogger(BlockingJobsMonitor.class.getName()).log(Level.INFO, "branchName: "+branchName+" - LOCKED");
-                                    return subTask;
-                                }
-                                if (gitBranch != null && gitBranch.matches(blockingBranch)) {
-                                    Logger.getLogger(BlockingJobsMonitor.class.getName()).log(Level.INFO, "GIT_BRANCH: "+gitBranch+" - LOCKED");
+                                String existingEnvVarValue = environment.get(envVar);
+                                if (existingEnvVarValue != null && blockingVarValue != null && existingEnvVarValue.matches(blockingVarValue)) {
+                                    Logger.getLogger(BlockingJobsMonitor.class.getName()).log(Level.INFO, "envVar:{0} with existingEnvVarValue:{1}  - LOCKED", new Object[]{envVar, existingEnvVarValue});
                                     return subTask;
                                 }
                             } catch (java.util.regex.PatternSyntaxException pse) {
