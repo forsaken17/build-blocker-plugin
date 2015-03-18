@@ -33,5 +33,8 @@
            method="checkRegex" with="blockingJobs" />
          </div>
          </f:entry>
+        <f:entry title="${%Blocking environment variable list}" field="blockingEnvVars">
+            <f:textarea />
+        </f:entry>
     </f:optionalBlock>
 </j:jelly>

@@ -21,11 +21,13 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
  * THE SOFTWARE.
  */
-
 package hudson.plugins.buildblocker;
 
+import hudson.model.Cause.UserCause;
 import hudson.model.FreeStyleBuild;
 import hudson.model.FreeStyleProject;
+import hudson.model.ParametersAction;
+import hudson.model.StringParameterValue;
 import hudson.model.labels.LabelAtom;
 import hudson.slaves.DumbSlave;
 import hudson.slaves.SlaveComputer;
@@ -43,6 +45,7 @@ public class BlockingJobsMonitorTest extends HudsonTestCase {
 
     /**
      * One test for all for faster execution
+     *
      * @throws Exception
      */
     public void testConstructor() throws Exception {
@@ -54,45 +57,62 @@ public class BlockingJobsMonitorTest extends HudsonTestCase {
         DumbSlave slave = this.createSlave(label);
         SlaveComputer c = slave.getComputer();
         c.connect(false).get(); // wait until it's connected
-        if(c.isOffline()) {
-            fail("Slave failed to go online: "+c.getLog());
+        if (c.isOffline()) {
+            fail("Slave failed to go online: " + c.getLog());
         }
 
         String blockingJobName = "blockingJob";
+        String blockingEnvVar = "blockingBranch";
 
         FreeStyleProject blockingProject = this.createFreeStyleProject(blockingJobName);
         blockingProject.setAssignedLabel(label);
 
-        Shell shell = new Shell("sleep 1");
+        Shell shell = new Shell("sleep 2");
         blockingProject.getBuildersList().add(shell);
 
-        Future<FreeStyleBuild> future = blockingProject.scheduleBuild2(0);
+        Future<FreeStyleBuild> future = blockingProject.scheduleBuild2(0, new UserCause(), new ParametersAction(new StringParameterValue("branchName", blockingEnvVar)));
 
         // wait until blocking job started
-        while(! slave.getComputer().getExecutors().get(0).isBusy()) {
+        while (!slave.getComputer().getExecutors().get(0).isBusy()) {
             TimeUnit.SECONDS.sleep(1);
         }
 
-        BlockingJobsMonitor blockingJobsMonitorUsingNull = new BlockingJobsMonitor(null);
+        BlockingJobsMonitor blockingJobsMonitorUsingNull = new BlockingJobsMonitor(null, null);
         assertNull(blockingJobsMonitorUsingNull.getBlockingJob(null));
 
-        BlockingJobsMonitor blockingJobsMonitorNotMatching = new BlockingJobsMonitor("xxx");
+        BlockingJobsMonitor blockingJobsMonitorNotMatching = new BlockingJobsMonitor("xxx", null);
         assertNull(blockingJobsMonitorNotMatching.getBlockingJob(null));
 
-        BlockingJobsMonitor blockingJobsMonitorUsingFullName = new BlockingJobsMonitor(blockingJobName);
+        BlockingJobsMonitor blockingJobsMonitorUsingFullName = new BlockingJobsMonitor(blockingJobName, null);
         assertEquals(blockingJobName, blockingJobsMonitorUsingFullName.getBlockingJob(null).getDisplayName());
 
-        BlockingJobsMonitor blockingJobsMonitorUsingRegex = new BlockingJobsMonitor("block.*");
+        BlockingJobsMonitor blockingJobsMonitorUsingRegex = new BlockingJobsMonitor("block.*", null);
         assertEquals(blockingJobName, blockingJobsMonitorUsingRegex.getBlockingJob(null).getDisplayName());
 
-        BlockingJobsMonitor blockingJobsMonitorUsingMoreLines = new BlockingJobsMonitor("xxx\nblock.*\nyyy");
+        BlockingJobsMonitor blockingJobsMonitorUsingMoreLines = new BlockingJobsMonitor("xxx\nblock.*\nyyy", null);
         assertEquals(blockingJobName, blockingJobsMonitorUsingMoreLines.getBlockingJob(null).getDisplayName());
 
-        BlockingJobsMonitor blockingJobsMonitorUsingWrongRegex = new BlockingJobsMonitor("*BW2S.*QRT.");
+        BlockingJobsMonitor blockingJobsMonitorUsingWrongRegex = new BlockingJobsMonitor("*BW2S.*QRT.", null);
         assertNull(blockingJobsMonitorUsingWrongRegex.getBlockingJob(null));
 
+        //blockingBranch
+        BlockingJobsMonitor blockingBranchMonitorUsingNull = new BlockingJobsMonitor(null, null);
+        assertNull(blockingBranchMonitorUsingNull.getBlockingJob(null));
+
+        BlockingJobsMonitor blockingBranchMonitorNotMatching = new BlockingJobsMonitor(null, "xxx");
+        assertNull(blockingBranchMonitorNotMatching.getBlockingJob(null));
+
+        BlockingJobsMonitor blockingBranchMonitorUsingFullName = new BlockingJobsMonitor(null, blockingEnvVar);
+        assertEquals(blockingJobName, blockingBranchMonitorUsingFullName.getBlockingJob(null).getDisplayName());
+
+        BlockingJobsMonitor blockingBranchMonitorUsingMoreLines = new BlockingJobsMonitor(null, "xxx\n"+blockingEnvVar+"\nyyy");
+        assertEquals(blockingJobName, blockingBranchMonitorUsingMoreLines.getBlockingJob(null).getDisplayName());
+
+        BlockingJobsMonitor blockingBranchMonitorUsingWrongRegex = new BlockingJobsMonitor(null, "*BW2S.*QRT.");
+        assertNull(blockingBranchMonitorUsingWrongRegex.getBlockingJob(null));
+
         // wait until blocking job stopped
-        while (! future.isDone()) {
+        while (!future.isDone()) {
             TimeUnit.SECONDS.sleep(1);
         }
 
