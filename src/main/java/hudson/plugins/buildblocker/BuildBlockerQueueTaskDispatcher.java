@@ -31,6 +31,8 @@ import hudson.model.Queue;
 import hudson.model.queue.CauseOfBlockage;
 import hudson.model.queue.QueueTaskDispatcher;
 import hudson.model.queue.SubTask;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
 /**
  * Queue task dispatcher that evaluates the given blocking jobs in the config of the
@@ -78,7 +80,12 @@ public class BuildBlockerQueueTaskDispatcher extends QueueTaskDispatcher {
                 String blockingJobs = property.getBlockingJobs();
                 String blockingEnvVars = property.getBlockingEnvVars();
 
-                SubTask subTask = new BlockingJobsMonitor(blockingJobs, blockingEnvVars).getBlockingJob(item);
+                SubTask subTask = null;
+                try {
+                    subTask = new BlockingJobsMonitor(blockingJobs, blockingEnvVars).getBlockingJob(item);
+                } catch (InterruptedException ex) {
+                    Logger.getLogger(BuildBlockerQueueTaskDispatcher.class.getName()).log(Level.SEVERE, null, ex);
+                }
 
                 if(subTask != null) {
                     if(subTask instanceof MatrixConfiguration) {

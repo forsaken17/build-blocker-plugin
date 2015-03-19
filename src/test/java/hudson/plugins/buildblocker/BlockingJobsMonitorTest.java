@@ -76,20 +76,7 @@ public class BlockingJobsMonitorTest extends HudsonTestCase {
         values.add(new StringParameterValue("blockingEnvVars", "branchName"));
         values.add(new StringParameterValue("GIT_BRANCH", ""));
         values.add(new StringParameterValue("branchName", "someBlockingBranch"));
-        Future<FreeStyleBuild> future = blockingProject.scheduleBuild2(0, new UserCause(), new ParametersAction(values));
-
-        FreeStyleProject blockedProject = this.createFreeStyleProject("random");
-        Future<FreeStyleBuild> future2 = blockedProject.scheduleBuild2(11, new UserCause(), new ParametersAction(values));
-//        CaptureEnvironmentBuilder ceb = new CaptureEnvironmentBuilder();
-//        blockedProject.getBuildersList().add(ceb);
-//        WebClient wc = new WebClient();
-//        wc.setThrowExceptionOnFailingStatusCode(false);
-//        wc.setPrintContentOnFailingStatusCode(false);
-//        HtmlForm form = wc.getPage(blockedProject, "build").getFormByName("parameters");
-//        form.getSelectByName("").getOptionByText("Specific build").setSelected(true);
-//        form.getInputByName("buildNumber").setValueAttribute("6");
-//        submit(form);
-        Queue.Item q = hudson.getQueue().getItem(blockedProject);
+        Future<FreeStyleBuild> future = blockingProject.scheduleBuild2(1, new UserCause(), new ParametersAction(values));
 
         // wait until blocking job started
         while (!slave.getComputer().getExecutors().get(0).isBusy()) {
@@ -115,6 +102,10 @@ public class BlockingJobsMonitorTest extends HudsonTestCase {
         assertNull(blockingJobsMonitorUsingWrongRegex.getBlockingJob(null));
 
         //blockingBranch
+        FreeStyleProject blockedProject = this.createFreeStyleProject("random");
+        Future<FreeStyleBuild> future3 = blockedProject.scheduleBuild2(2, new UserCause(), new ParametersAction(values));
+        Queue.Item q = hudson.getQueue().getItem(blockedProject);
+
         BlockingJobsMonitor blockingBranchMonitorUsingNull = new BlockingJobsMonitor(null, null);
         assertNull(blockingBranchMonitorUsingNull.getBlockingJob(q));
 

@@ -34,12 +34,14 @@ import hudson.model.ParametersAction;
 import hudson.model.Run;
 import hudson.model.TaskListener;
 import hudson.model.queue.SubTask;
+import hudson.util.RunList;
 import java.io.IOException;
 import jenkins.model.Jenkins;
 import org.apache.commons.lang.StringUtils;
 
 import java.util.Arrays;
 import java.util.HashMap;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.logging.Level;
@@ -82,8 +84,9 @@ public class BlockingJobsMonitor {
      * @param item The queue item for which we are checking whether it can run or not. or null if we are not checking a
      * job from the queue (currently only used by testing).
      * @return the name of the first blocking job.
+     * @throws java.lang.InterruptedException
      */
-    public SubTask getBlockingJob(Queue.Item item) {
+    public SubTask getBlockingJob(Queue.Item item) throws InterruptedException {
         if (this.blockingJobs == null && this.blockingEnvVars == null) {
             return null;
         }
@@ -121,29 +124,38 @@ public class BlockingJobsMonitor {
                     if (this.blockingEnvVars != null && !this.blockingEnvVars.isEmpty()) {
                         for (String envVar : this.blockingEnvVars) {
                             Map<String, String> itemParamsMap = new HashMap<String, String>();
-                            if (item != null) {
-                                for (ParametersAction pa : item.getActions(ParametersAction.class)) {
-                                    for (ParameterValue p : pa.getParameters()) {
-                                        String valueRaw = p.getShortDescription();
-                                        if (StringUtils.isNotBlank(valueRaw) && valueRaw.contains("=")) {
-                                            String[] keyValue = valueRaw.split("=",-1);
-                                            String value = keyValue[1].replaceAll("^\'|\'$", "");
-                                            if (value != null) {
-                                                itemParamsMap.put(p.getName(), value);
-                                            }
+                            if (item == null) {
+                                throw new InterruptedException("Queue.Item item; nothing to test");
+                            }
+                            Logger.getLogger(BlockingJobsMonitor.class.getName()).log(Level.INFO, "item name: " + item.toString());
+                            for (ParametersAction pa : item.getActions(ParametersAction.class)) {
+                                for (ParameterValue p : pa.getParameters()) {
+                                    String valueRaw = p.getShortDescription();
+                                    if (StringUtils.isNotBlank(valueRaw) && valueRaw.contains("=")) {
+                                        String[] keyValue = valueRaw.split("=", -1);
+                                        String value = keyValue[1].replaceAll("^\'|\'$", "");
+                                        if (value != null) {
+                                            itemParamsMap.put(p.getName(), value);
                                         }
                                     }
                                 }
-                                Logger.getLogger(BlockingJobsMonitor.class.getName()).log(Level.INFO, "itemParamsMap: " + itemParamsMap);
                             }
+                            Logger.getLogger(BlockingJobsMonitor.class.getName()).log(Level.INFO, "itemParamsMap: " + itemParamsMap);
                             try {
                                 String blockingVarValue = itemParamsMap.get(envVar);
-                                Run build = project.getLastBuild();
-                                EnvVars environment = build.getEnvironment(TaskListener.NULL);
-                                String existingEnvVarValue = environment.get(envVar);
-                                if (existingEnvVarValue != null && blockingVarValue != null && existingEnvVarValue.matches(blockingVarValue)) {
-                                    Logger.getLogger(BlockingJobsMonitor.class.getName()).log(Level.INFO, "envVar:{0} with existingEnvVarValue:{1}  - LOCKED", new Object[]{envVar, existingEnvVarValue});
-                                    return subTask;
+                                RunList buildList = project.getBuilds();
+
+                                for (Iterator it = buildList.iterator(); it.hasNext();) {
+                                    Run build = (Run) it.next();
+                                    Logger.getLogger(BlockingJobsMonitor.class.getName()).log(Level.INFO, "build Status: " + build.isBuilding() + ", " + build.toString());
+                                    if (build.isBuilding()) {
+                                        EnvVars environment = build.getEnvironment(TaskListener.NULL);
+                                        String existingEnvVarValue = environment.get(envVar);
+                                        if (existingEnvVarValue != null && blockingVarValue != null && existingEnvVarValue.matches(blockingVarValue)) {
+                                            Logger.getLogger(BlockingJobsMonitor.class.getName()).log(Level.INFO, "envVar:{0} with existingEnvVarValue:{1}  - LOCKED", new Object[]{envVar, existingEnvVarValue});
+                                            return subTask;
+                                        }
+                                    }
                                 }
                             } catch (java.util.regex.PatternSyntaxException pse) {
                                 return null;
