@@ -15,4 +15,4 @@ environment variable support added
 * jenkins **job** is locked if the environment variable say *ENV_VAR* exist in scheduled or running job
 
 e.g. git branch lock
-  environment variable **branchName** or **GIT_BRANCH** matches injected with *EnvInject Plugin* or *Git pull request builder plugin*
+  environment variable **branchName** or **GIT_BRANCH** matches injected by *Git pull request builder plugin*

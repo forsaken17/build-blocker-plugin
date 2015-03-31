@@ -179,7 +179,7 @@ public class BlockingJobsMonitor {
                 = Jenkins.getInstance().getQueue().getBuildableItems();
 
         for (Queue.BuildableItem buildableItem : buildableItems) {
-            if (item != buildableItem) {
+            if (item != buildableItem && this.blockingJobs != null && !this.blockingJobs.isEmpty()) {
                 for (String blockingJob : this.blockingJobs) {
                     AbstractProject project = (AbstractProject) buildableItem.task;
                     if (project.getFullName().matches(blockingJob)) {
