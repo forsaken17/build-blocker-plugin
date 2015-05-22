@@ -34,6 +34,7 @@ import hudson.model.ParametersAction;
 import hudson.model.Run;
 import hudson.model.TaskListener;
 import hudson.model.queue.SubTask;
+import hudson.plugins.git.RevisionParameterAction;
 import hudson.util.RunList;
 import java.io.IOException;
 import jenkins.model.Jenkins;
@@ -108,12 +109,40 @@ public class BlockingJobsMonitor {
                     if (task instanceof MatrixConfiguration) {
                         task = ((MatrixConfiguration) task).getParent();
                     }
-
+                    //current building job
                     AbstractProject project = (AbstractProject) task;
                     if (this.blockingJobs != null && !this.blockingJobs.isEmpty()) {
                         for (String blockingJob : this.blockingJobs) {
                             try {
-                                if (project.getFullName().matches(blockingJob)) {
+                                String commitHashQueued = null;
+                                if (item != null) {
+                                    RevisionParameterAction revisionQueued = item.getAction(RevisionParameterAction.class);
+                                    commitHashQueued = revisionQueued.commit;
+                                    commitHashQueued = commitHashQueued == null ? "" : commitHashQueued;
+                                    try {
+                                        RunList buildList = project.getBuilds();
+                                        //test against each job in the list
+                                        for (Iterator it = buildList.iterator(); it.hasNext();) {
+                                            Run build = (Run) it.next();
+                                            Logger.getLogger(BlockingJobsMonitor.class.getName()).log(Level.INFO, "blockingJobs build Status: " + build.isBuilding() + ", " + build.toString());
+                                            if (build.isBuilding()) {
+                                                RevisionParameterAction revision = build.getAction(RevisionParameterAction.class);
+                                                String commitHash = revision == null? null : revision.commit;
+                                                commitHash = commitHash == null ? "" : commitHash;
+                                                Logger.getLogger(BlockingJobsMonitor.class.getName()).log(Level.INFO, "commitHash:{0} with commitHashQueued:{1}  - pre-locking ...;blockingVarValue: {2}", new Object[]{commitHash, commitHashQueued});
+
+                                                //returns current running task
+                                                if (project.getFullName().matches(blockingJob) && commitHash == commitHashQueued) {
+                                                    Logger.getLogger(BlockingJobsMonitor.class.getName()).log(Level.INFO, "commitHash:{0} with commitHashQueued:{1}  - LOCKED", new Object[]{commitHash, commitHashQueued});
+                                                    return subTask;
+                                                }
+
+                                            }
+                                        }
+                                    } catch (java.util.regex.PatternSyntaxException pse) {
+                                        return null;
+                                    }
+                                } else if (project.getFullName().matches(blockingJob)) {
                                     return subTask;
                                 }
                             } catch (java.util.regex.PatternSyntaxException pse) {
@@ -127,6 +156,7 @@ public class BlockingJobsMonitor {
                             if (item == null) {
                                 throw new InterruptedException("Queue.Item item; nothing to test");
                             }
+                            //gather params
                             Logger.getLogger(BlockingJobsMonitor.class.getName()).log(Level.INFO, "item name: " + item.toString());
                             for (ParametersAction pa : item.getActions(ParametersAction.class)) {
                                 for (ParameterValue p : pa.getParameters()) {
@@ -144,13 +174,14 @@ public class BlockingJobsMonitor {
                             try {
                                 String blockingVarValue = itemParamsMap.get(envVar);
                                 RunList buildList = project.getBuilds();
-
+                                //test against each job in the list
                                 for (Iterator it = buildList.iterator(); it.hasNext();) {
                                     Run build = (Run) it.next();
-                                    Logger.getLogger(BlockingJobsMonitor.class.getName()).log(Level.INFO, "build Status: " + build.isBuilding() + ", " + build.toString());
+//                                    Logger.getLogger(BlockingJobsMonitor.class.getName()).log(Level.INFO, "build Status: " + build.isBuilding() + ", " + build.toString());
                                     if (build.isBuilding()) {
                                         EnvVars environment = build.getEnvironment(TaskListener.NULL);
                                         String existingEnvVarValue = environment.get(envVar);
+                                        Logger.getLogger(BlockingJobsMonitor.class.getName()).log(Level.INFO, "envVar:{0} with existingEnvVarValue:{1}  - pre-locking ...;blockingVarValue: {2}", new Object[]{envVar, existingEnvVarValue, blockingVarValue});
                                         if (existingEnvVarValue != null && blockingVarValue != null && existingEnvVarValue.matches(blockingVarValue)) {
                                             Logger.getLogger(BlockingJobsMonitor.class.getName()).log(Level.INFO, "envVar:{0} with existingEnvVarValue:{1}  - LOCKED", new Object[]{envVar, existingEnvVarValue});
                                             return subTask;
@@ -182,9 +213,41 @@ public class BlockingJobsMonitor {
             if (item != buildableItem && this.blockingJobs != null && !this.blockingJobs.isEmpty()) {
                 for (String blockingJob : this.blockingJobs) {
                     AbstractProject project = (AbstractProject) buildableItem.task;
-                    if (project.getFullName().matches(blockingJob)) {
-                        return buildableItem.task;
+                    try {
+                        String commitHashQueued = null;
+                        commitHashQueued = commitHashQueued == null ? "" : commitHashQueued;
+                        if (item != null) {
+                            RevisionParameterAction revisionQueued = item.getAction(RevisionParameterAction.class);
+                            commitHashQueued = revisionQueued.commit;
+                            try {
+                                RunList buildList = project.getBuilds();
+                                //test against each job in the list
+                                for (Iterator it = buildList.iterator(); it.hasNext();) {
+                                    Run build = (Run) it.next();
+                                    Logger.getLogger(BlockingJobsMonitor.class.getName()).log(Level.INFO, "blockingJobs build Status: " + build.isBuilding() + ", " + build.toString());
+                                    if (build.isBuilding()) {
+                                        RevisionParameterAction revision = build.getAction(RevisionParameterAction.class);
+                                        String commitHash = revision == null? null : revision.commit;
+                                        commitHash = commitHash == null ? "" : commitHash;
+                                        Logger.getLogger(BlockingJobsMonitor.class.getName()).log(Level.INFO, "commitHash:{0} with commitHashQueued:{1}  - pre-locking ...;blockingVarValue: {2}", new Object[]{commitHash, commitHashQueued});
+                                        //returns current running task
+                                        if (project.getFullName().matches(blockingJob) && commitHash == commitHashQueued) {
+                                            Logger.getLogger(BlockingJobsMonitor.class.getName()).log(Level.INFO, "commitHash:{0} with commitHashQueued:{1}  - LOCKED", new Object[]{commitHash, commitHashQueued});
+                                            return buildableItem.task;
+                                        }
+
+                                    }
+                                }
+                            } catch (java.util.regex.PatternSyntaxException pse) {
+                                return null;
+                            }
+                        } else if (project.getFullName().matches(blockingJob)) {
+                            return buildableItem.task;
+                        }
+                    } catch (java.util.regex.PatternSyntaxException pse) {
+                        return null;
                     }
+
                 }
             }
         }
