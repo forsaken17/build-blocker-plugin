@@ -29,12 +29,12 @@
   <parent>
     <groupId>org.jenkins-ci.plugins</groupId>
     <artifactId>plugin</artifactId>
-    <version>1.466</version>
+    <version>1.596.2</version>
   </parent>
 
-  <artifactId>build-blocker-plugin</artifactId>
-  <name>Build Blocker Plugin</name>
-  <version>1.7-SNAPSHOT</version>
+  <artifactId>cog-bbp</artifactId>
+  <name>COG Build Blocker Plugin</name>
+  <version>1.8</version>
   <packaging>hpi</packaging>
   <url>https://wiki.jenkins-ci.org/display/JENKINS/Build+Blocker+Plugin</url>
 
@@ -52,12 +52,17 @@
       <name>Frederik Fromm</name>
       <email>frederik.fromm@gmail.com</email>
     </developer>
+    <developer>
+      <id>forsaken17</id>
+      <name>Tim Tkachenko</name>
+      <email>ateamdev@gmail.com</email>
+    </developer>
   </developers>
 
   <scm>
-    <connection>scm:git:https://ffromm@github.com/jenkinsci/build-blocker-plugin.git</connection>
-    <developerConnection>scm:git:https://ffromm@github.com/jenkinsci/build-blocker-plugin.git</developerConnection>
-    <url>https://github.com/jenkinsci/build-blocker-plugin.git</url>
+    <connection>scm:git:https://github.com/forsaken17/build-blocker-plugin.git</connection>
+    <developerConnection>scm:git:https://github.com/forsaken17/build-blocker-plugin.git</developerConnection>
+    <url>https://github.com/forsaken17/build-blocker-plugin.git</url>
     <tag>HEAD</tag>
   </scm>
 
@@ -114,4 +119,12 @@
       </plugins>
     </pluginManagement>
   </build>
+    <dependencies>
+        <dependency>
+            <groupId>org.jenkins-ci.plugins</groupId>
+            <artifactId>matrix-project</artifactId>
+            <version>1.4.1</version>
+            <type>jar</type>
+        </dependency>
+    </dependencies>
 </project>
